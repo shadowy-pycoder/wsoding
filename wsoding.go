@@ -19,7 +19,7 @@ import (
 const chunkSize int = 1024
 
 type WS struct {
-	sock   *socket.Conn
+	Sock   *socket.Conn
 	Debug  bool
 	Client bool
 }
@@ -27,13 +27,13 @@ type WS struct {
 func (ws *WS) Close() error {
 	// Base on the ideas from https://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
 	// Informing the OS that we are not planning to send anything anymore
-	if err := ws.sock.Shutdown(syscall.SHUT_WR); err != nil {
+	if err := ws.Sock.Shutdown(syscall.SHUT_WR); err != nil {
 		return err
 	}
 	// Depleting input before closing socket, so the OS does not send RST just because we have some input pending on close
 	buffer := make([]byte, 1024)
 	for {
-		n, err := ws.sock.Read(buffer)
+		n, err := ws.Sock.Read(buffer)
 		if err != nil {
 			return err
 		}
@@ -42,12 +42,12 @@ func (ws *WS) Close() error {
 		}
 	}
 	// TODO: consider depleting the send buffer on Linux with ioctl(fd, SIOCOUTQ, &outstanding)
-	return ws.sock.Close() // Actually destroying the socket
+	return ws.Sock.Close() // Actually destroying the socket
 }
 
 func (ws *WS) readEntireBufferRaw(buffer []byte) error {
 	for len(buffer) > 0 {
-		n, err := ws.sock.Read(buffer)
+		n, err := ws.Sock.Read(buffer)
 		if err != nil {
 			return err
 		}
@@ -58,7 +58,7 @@ func (ws *WS) readEntireBufferRaw(buffer []byte) error {
 
 func (ws *WS) writeEntireBufferRaw(buffer []byte) error {
 	for len(buffer) > 0 {
-		n, err := ws.sock.Write(buffer)
+		n, err := ws.Sock.Write(buffer)
 		if err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ func (ws *WS) writeEntireBufferRaw(buffer []byte) error {
 }
 
 func (ws *WS) peekRaw(buffer []byte) (int, error) {
-	n, _, err := ws.sock.Recvfrom(context.TODO(), buffer, syscall.MSG_PEEK)
+	n, _, err := ws.Sock.Recvfrom(context.TODO(), buffer, syscall.MSG_PEEK)
 	if err != nil {
 		return 0, err
 	}
@@ -79,10 +79,10 @@ func (ws *WS) peekRaw(buffer []byte) (int, error) {
 
 func Accept(sock *socket.Conn) (WS, error) {
 	ws := WS{
-		sock:   sock,
+		Sock:   sock,
 		Client: false,
 	}
-	err := ws.serverHandshake()
+	err := ws.ServerHandshake()
 	if err != nil {
 		return WS{}, err
 	}
@@ -93,17 +93,17 @@ func Accept(sock *socket.Conn) (WS, error) {
 
 func Connect(sock *socket.Conn, host string, endpoint string) (WS, error) {
 	ws := WS{
-		sock:   sock,
+		Sock:   sock,
 		Client: true,
 	}
-	err := ws.clientHandshake(host, endpoint)
+	err := ws.ClientHandshake(host, endpoint)
 	if err != nil {
 		return WS{}, err
 	}
 	return ws, nil
 }
 
-func (ws *WS) serverHandshake() error {
+func (ws *WS) ServerHandshake() error {
 	// TODO: Ws.server_handshake assumes that request fits into 1024 bytes
 	buffer := make([]byte, 1024)
 	bufferSize, err := ws.peekRaw(buffer)
@@ -115,7 +115,7 @@ func (ws *WS) serverHandshake() error {
 	if err != nil {
 		return err
 	}
-	_, err = ws.sock.Read(buffer[0 : bufferSize-len(request)])
+	_, err = ws.Sock.Read(buffer[0 : bufferSize-len(request)])
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (ws *WS) serverHandshake() error {
 	handshake.WriteString("Connection: Upgrade\r\n")
 	handshake.WriteString(fmt.Sprintf("Sec-WebSocket-Accept: %s\r\n", computeSecWebSocketAccept(secWebSocketKey)))
 	handshake.WriteString("\r\n")
-	_, err = ws.sock.Write([]byte(handshake.String()))
+	_, err = ws.Sock.Write([]byte(handshake.String()))
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (ws *WS) serverHandshake() error {
 // https://datatracker.ietf.org/doc/html/rfc6455#section-1.3
 // TODO: Ws.client_handshake should just accept a ws/wss URL
 
-func (ws *WS) clientHandshake(host, endpoint string) error {
+func (ws *WS) ClientHandshake(host, endpoint string) error {
 	var handshake strings.Builder
 	handshake.Grow(1024)
 	// TODO: customizable resource path
@@ -149,7 +149,7 @@ func (ws *WS) clientHandshake(host, endpoint string) error {
 	handshake.WriteString("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n")
 	handshake.WriteString("Sec-WebSocket-Version: 13\r\n")
 	handshake.WriteString("\r\n")
-	_, err := ws.sock.Write([]byte(handshake.String()))
+	_, err := ws.Sock.Write([]byte(handshake.String()))
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (ws *WS) clientHandshake(host, endpoint string) error {
 	if err != nil {
 		return err
 	}
-	_, err = ws.sock.Read(buffer[0 : bufferSize-len(response)])
+	_, err = ws.Sock.Read(buffer[0 : bufferSize-len(response)])
 	if err != nil {
 		return err
 	}
@@ -304,13 +304,13 @@ func (ws *WS) SendMessage(kind WSMessageKind, payload []byte) error {
 	return nil
 }
 
-// func (ws *WS) sendText(text string) error {
-// 	return ws.SendMessage(MessageTEXT, []byte(text))
-// }
+func (ws *WS) SendText(text string) error {
+	return ws.SendMessage(MessageTEXT, []byte(text))
+}
 
-// func (ws *WS) sendBinary(binary []byte) error {
-// 	return ws.SendMessage(MessageBIN, binary)
-// }
+func (ws *WS) SendBinary(binary []byte) error {
+	return ws.SendMessage(MessageBIN, binary)
+}
 
 func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 	header := make([]byte, 2)
@@ -362,7 +362,7 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 	// RFC 6455 - Section 5.5:
 	// > All control frames MUST have a payload length of 125 bytes or less
 	// > and MUST NOT be fragmented.
-	if frameHeader.opcode.isControl() && frameHeader.payloadLen > 125 || !frameHeader.fin {
+	if frameHeader.opcode.isControl() && (frameHeader.payloadLen > 125 || !frameHeader.fin) {
 		return WSFrameHeader{}, ErrControlFrameTooBig
 	}
 
@@ -393,7 +393,7 @@ func (ws *WS) readFramePayloadChunk(frameHeader WSFrameHeader, payload []byte, p
 		return 0, nil
 	}
 	unfinishedPayload := payload[payloadSize:]
-	n, err := ws.sock.Read(unfinishedPayload)
+	n, err := ws.Sock.Read(unfinishedPayload)
 	if err != nil {
 		return 0, err
 	}
@@ -474,6 +474,9 @@ loop:
 				n, err := ws.readFramePayloadChunk(frame, framePayload, framePayloadSize)
 				if err != nil {
 					return nil, err
+				}
+				if framePayloadSize > n {
+					break
 				}
 				payload = append(payload, framePayload[framePayloadSize:n]...)
 				framePayloadSize += n

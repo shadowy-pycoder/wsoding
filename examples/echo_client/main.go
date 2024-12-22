@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/netip"
 	"syscall"
@@ -22,10 +23,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ws, err := wsoding.Connect(client, netip.AddrFrom4(config.Host).String(), "/")
+	hostPort := fmt.Sprintf("%s:%d", netip.AddrFrom4(config.Host), config.Port)
+	ws, err := wsoding.Connect(client, hostPort, "/")
 	if err != nil {
 		log.Fatal(err)
 	}
-	go echo.Serve(ws)
+	echo.Serve(ws)
 
 }

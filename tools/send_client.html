@@ -11,7 +11,7 @@
         <script>
             // TODO: it would be ideal if the port somehow was taken from a common config shared between all the examples
             // Right now it's located in example_config.c3, but obviously c3 file is not usable in js
-            const ws = new WebSocket("ws://localhost:9001/");
+            const ws = new WebSocket("ws://172.17.0.1:9001/");
             ws.onerror = (e) => {
                 console.log("WebSocket ERROR", e);
             };

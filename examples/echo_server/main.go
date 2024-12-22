@@ -49,6 +49,7 @@ func main() {
 			log.Println(err)
 			if err = client.Close(); err != nil {
 				log.Println(err)
+				continue
 			}
 		}
 		ws.Debug = true

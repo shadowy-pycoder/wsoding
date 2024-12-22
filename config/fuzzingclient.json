@@ -1,0 +1,12 @@
+{
+    "outdir": "./reports/servers",
+    "servers": [
+        {
+            "agent": "ReadAllWriteMessage",
+            "url": "ws://172.17.0.1:9001"
+        }
+    ],
+    "cases": ["*"],
+    "exclude-cases": ["9.7.*", "9.8.*"],
+    "exclude-agent-cases": {}
+}
