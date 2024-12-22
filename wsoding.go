@@ -18,9 +18,6 @@ import (
 
 const chunkSize int = 1024
 
-var dummyErr = fmt.Errorf("dummy error")
-var extraDummy = fmt.Errorf("extra")
-
 type WS struct {
 	sock   *socket.Conn
 	Debug  bool
@@ -45,7 +42,7 @@ func (ws *WS) Close() error {
 		}
 	}
 	// TODO: consider depleting the send buffer on Linux with ioctl(fd, SIOCOUTQ, &outstanding)
-	return ws.sock.Close()
+	return ws.sock.Close() // Actually destroying the socket
 }
 
 func (ws *WS) readEntireBufferRaw(buffer []byte) error {
@@ -172,7 +169,7 @@ func (ws *WS) clientHandshake(host, endpoint string) error {
 		return err
 	}
 	if secWebSocketAccept != "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=" {
-		return dummyErr
+		return ErrClientHandshakeBadAccept
 	}
 	return nil
 }
@@ -188,7 +185,10 @@ func (ws *WS) SendFrame(fin bool, opcode WSOpcode, payload []byte) error {
 		if fin {
 			data |= (1 << 7)
 		}
-		ws.writeEntireBufferRaw([]byte{data})
+		err := ws.writeEntireBufferRaw([]byte{data})
+		if err != nil {
+			return err
+		}
 	}
 	// Send masked and payload length
 	{
@@ -249,9 +249,12 @@ func (ws *WS) SendFrame(fin bool, opcode WSOpcode, payload []byte) error {
 	}
 	if ws.Client {
 		// Generate and send mask
-		mask := make([]byte, 4)
-		rand.Read(mask)
-		ws.writeEntireBufferRaw(mask)
+		var mask [4]byte
+		rand.Read(mask[:])
+		err := ws.writeEntireBufferRaw(mask[:])
+		if err != nil {
+			return err
+		}
 		for i := 0; i < len(payload); {
 			chunk := make([]byte, 1024)
 			chunkSize := 0
@@ -260,11 +263,17 @@ func (ws *WS) SendFrame(fin bool, opcode WSOpcode, payload []byte) error {
 				chunkSize++
 				i++
 			}
-			ws.writeEntireBufferRaw(chunk[0:chunkSize])
+			err := ws.writeEntireBufferRaw(chunk[0:chunkSize])
+			if err != nil {
+				return err
+			}
 		}
 
 	} else {
-		ws.writeEntireBufferRaw(payload)
+		err := ws.writeEntireBufferRaw(payload)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -277,7 +286,7 @@ func (ws *WS) SendMessage(kind WSMessageKind, payload []byte) error {
 			length = chunkSize
 		}
 		fin := len(payload)-length == 0
-		opcode := opCodeCONT
+		opcode := OpCodeCONT
 		if first {
 			opcode = WSOpcode(kind)
 		}
@@ -295,13 +304,13 @@ func (ws *WS) SendMessage(kind WSMessageKind, payload []byte) error {
 	return nil
 }
 
-func (ws *WS) sendText(text string) error {
-	return ws.SendMessage(messageTEXT, []byte(text))
-}
+// func (ws *WS) sendText(text string) error {
+// 	return ws.SendMessage(MessageTEXT, []byte(text))
+// }
 
-func (ws *WS) sendBinary(binary []byte) error {
-	return ws.SendMessage(messageBIN, binary)
-}
+// func (ws *WS) sendBinary(binary []byte) error {
+// 	return ws.SendMessage(MessageBIN, binary)
+// }
 
 func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 	header := make([]byte, 2)
@@ -312,12 +321,12 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 	}
 
 	frameHeader := WSFrameHeader{
-		fin:    Itob(headerMacro(header, "fin")),
-		rsv1:   Itob(headerMacro(header, "rsv1")),
-		rsv2:   Itob(headerMacro(header, "rsv2")),
-		rsv3:   Itob(headerMacro(header, "rsv3")),
+		fin:    itob(headerMacro(header, "fin")),
+		rsv1:   itob(headerMacro(header, "rsv1")),
+		rsv2:   itob(headerMacro(header, "rsv2")),
+		rsv3:   itob(headerMacro(header, "rsv3")),
 		opcode: WSOpcode(headerMacro(header, "opcode")),
-		masked: Itob(headerMacro(header, "mask")),
+		masked: itob(headerMacro(header, "mask")),
 	}
 	// Parse the payload length
 	{
@@ -328,7 +337,7 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 			extLen := make([]byte, 2)
 			err := ws.readEntireBufferRaw(extLen)
 			if err != nil {
-				return WSFrameHeader{}, dummyErr
+				return WSFrameHeader{}, err
 			}
 			for i := 0; i < len(extLen); i++ {
 				frameHeader.payloadLen = (frameHeader.payloadLen << 8) | int(extLen[i])
@@ -337,7 +346,7 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 			extLen := make([]byte, 8)
 			err := ws.readEntireBufferRaw(extLen)
 			if err != nil {
-				return WSFrameHeader{}, dummyErr
+				return WSFrameHeader{}, err
 			}
 			for i := 0; i < len(extLen); i++ {
 				frameHeader.payloadLen = (frameHeader.payloadLen << 8) | int(extLen[i])
@@ -347,14 +356,14 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 		}
 	}
 	if ws.Debug {
-		fmt.Printf("WSODING DEBUG: RX FRAME: FIN(%v), OPCODE(%s), RSV(%d%d%d), PAYLOAD_LEN: %d\n", frameHeader.fin, frameHeader.opcode.name(), Btoi(frameHeader.rsv1), Btoi(frameHeader.rsv2), Btoi(frameHeader.rsv3),
+		fmt.Printf("WSODING DEBUG: RX FRAME: FIN(%v), OPCODE(%s), RSV(%d%d%d), PAYLOAD_LEN: %d\n", frameHeader.fin, frameHeader.opcode.name(), btoi(frameHeader.rsv1), btoi(frameHeader.rsv2), btoi(frameHeader.rsv3),
 			frameHeader.payloadLen)
 	}
 	// RFC 6455 - Section 5.5:
 	// > All control frames MUST have a payload length of 125 bytes or less
 	// > and MUST NOT be fragmented.
 	if frameHeader.opcode.isControl() && frameHeader.payloadLen > 125 || !frameHeader.fin {
-		return WSFrameHeader{}, dummyErr
+		return WSFrameHeader{}, ErrControlFrameTooBig
 	}
 
 	// RFC 6455 - Section 5.2:
@@ -366,7 +375,7 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 	// >     value, the receiving endpoint MUST _Fail the WebSocket
 	// >     Connection_.
 	if frameHeader.rsv1 || frameHeader.rsv2 || frameHeader.rsv3 {
-		return WSFrameHeader{}, dummyErr
+		return WSFrameHeader{}, ErrReservedBitsNotNegotiated
 	}
 
 	// Read the mask if masked
@@ -425,15 +434,15 @@ loop:
 		}
 		if frame.opcode.isControl() {
 			switch frame.opcode {
-			case opCodeCLOSE:
-				return nil, dummyErr
-			case opCodePING:
+			case OpCodeCLOSE:
+				return nil, ErrCloseFrameSent
+			case OpCodePING:
 				payload, err := ws.readFrameEntirePayload(frame)
 				if err != nil {
 					return nil, err
 				}
-				ws.SendFrame(true, opCodePONG, payload)
-			case opCodePONG:
+				ws.SendFrame(true, OpCodePONG, payload)
+			case OpCodePONG:
 				_, err := ws.readFrameEntirePayload(frame)
 				if err != nil {
 					return nil, err
@@ -441,22 +450,22 @@ loop:
 				// Unsolicited PONGs are just ignored
 				break loop
 			default:
-				return nil, dummyErr
+				return nil, ErrUnexpectedOpCode
 			}
 		} else {
 			if !cont {
 				switch frame.opcode {
-				case opCodeTEXT:
+				case OpCodeTEXT:
 					fallthrough
-				case opCodeBIN:
+				case OpCodeBIN:
 					message.Kind = WSMessageKind(frame.opcode)
 				default:
-					return nil, dummyErr
+					return nil, ErrUnexpectedOpCode
 				}
 				cont = true
 			} else {
-				if frame.opcode != opCodeCONT {
-					return nil, dummyErr
+				if frame.opcode != OpCodeCONT {
+					return nil, ErrUnexpectedOpCode
 				}
 			}
 			framePayload := make([]byte, frame.payloadLen)
@@ -468,12 +477,12 @@ loop:
 				}
 				payload = append(payload, framePayload[framePayloadSize:n]...)
 				framePayloadSize += n
-				if message.Kind == messageTEXT {
+				if message.Kind == MessageTEXT {
 					// Verifying UTF-8
 					for verifyPos < len(payload) {
 						size := len(payload) - verifyPos
 						if _, err := utf8ToChar32Fixed(unsafe.Pointer(unsafe.SliceData(payload[verifyPos:])), &size); err != nil {
-							if errors.Is(err, extraDummy) {
+							if errors.Is(err, ErrShortUtf8) {
 								if !frame.fin {
 									savedLen := len(payload)
 									extendUnfinishedUtf8(&payload, verifyPos)
@@ -506,6 +515,27 @@ loop:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Client Handshake Errors
+var ErrClientHandshakeBadResponse = errors.New("client handshake bad response")
+var ErrClientHandshakeNoAccept = errors.New("client handshake no accept")
+var ErrClientHandshakeDuplicateAccept = errors.New("client handshake duplicate accept")
+var ErrClientHandshakeBadAccept = errors.New("client handshake bad accept")
+
+// Server Handshake Errors
+var ErrServerHandshakeBadRequest = errors.New("server handshake bad request")
+var ErrServerHandshakeNoKey = errors.New("server handshake no key")
+var ErrServerHandshakeDuplicateKey = errors.New("server handshake duplicate key")
+
+// Connection Errors
+var ErrCloseFrameSent = errors.New("close frame sent")
+var ErrControlFrameTooBig = errors.New("control frame too big")
+var ErrReservedBitsNotNegotiated = errors.New("reserved bits not negotiated")
+var ErrUnexpectedOpCode = errors.New("unexpected opcode")
+
+// utf-8 Errors
+var ErrShortUtf8 = errors.New("short utf-8")
+var ErrInvalidUtf8 = errors.New("invalid utf-8")
 
 func headerMacro(header []byte, field string) byte {
 	switch field {
@@ -544,7 +574,7 @@ func parseSecWebSocketKeyFromRequest(request *string) (string, error) {
 	if index := strings.Index(*request, lineSep); index != -1 {
 		*request = (*request)[index+len(lineSep):]
 	} else {
-		return "", dummyErr
+		return "", ErrServerHandshakeBadRequest
 	}
 	// TODO: verify the rest of the headers of the request
 	// Right now we are only looking for Sec-WebSocket-Key
@@ -554,18 +584,18 @@ func parseSecWebSocketKeyFromRequest(request *string) (string, error) {
 			header = (*request)[0:index]
 			*request = (*request)[index+len(lineSep):]
 		} else {
-			return "", dummyErr
+			return "", ErrServerHandshakeBadRequest
 		}
 		var key, value string
 		if index := strings.Index(header, headerSep); index != -1 {
 			key = strings.TrimSpace(header[0:index])
 			value = strings.TrimSpace(header[index+len(headerSep):])
 		} else {
-			return "", dummyErr
+			return "", ErrServerHandshakeBadRequest
 		}
 		if key == "Sec-WebSocket-Key" {
 			if foundSecWebSocketKey {
-				return "", dummyErr
+				return "", ErrServerHandshakeDuplicateKey
 			}
 			secWebSocketKey = value
 			foundSecWebSocketKey = true
@@ -573,11 +603,11 @@ func parseSecWebSocketKeyFromRequest(request *string) (string, error) {
 
 	}
 	if !strings.HasPrefix(*request, lineSep) {
-		return "", dummyErr
+		return "", ErrServerHandshakeBadRequest
 	}
 	*request = (*request)[len(lineSep):]
 	if !foundSecWebSocketKey {
-		return "", dummyErr
+		return "", ErrServerHandshakeNoKey
 	}
 	return secWebSocketKey, nil
 }
@@ -593,7 +623,7 @@ func parseSecWebSocketAcceptFromResponse(response *string) (string, error) {
 	if index := strings.Index(*response, lineSep); index != -1 {
 		*response = (*response)[index+len(lineSep):]
 	} else {
-		return "", dummyErr
+		return "", ErrClientHandshakeBadResponse
 	}
 	// TODO: verify the rest of the headers of the response
 	// Right now we are only looking for Sec-WebSocket-Accept
@@ -603,18 +633,18 @@ func parseSecWebSocketAcceptFromResponse(response *string) (string, error) {
 			header = (*response)[0:index]
 			*response = (*response)[index+len(lineSep):]
 		} else {
-			return "", dummyErr
+			return "", ErrClientHandshakeBadResponse
 		}
 		var key, value string
 		if index := strings.Index(header, headerSep); index != -1 {
 			key = strings.TrimSpace(header[0:index])
 			value = strings.TrimSpace(header[index+len(headerSep):])
 		} else {
-			return "", dummyErr
+			return "", ErrClientHandshakeBadResponse
 		}
 		if key == "Sec-WebSocket-Accept" {
 			if foundSecWebSocketAccept {
-				return "", dummyErr
+				return "", ErrClientHandshakeDuplicateAccept
 			}
 			secWebSocketAccept = value
 			foundSecWebSocketAccept = true
@@ -622,19 +652,19 @@ func parseSecWebSocketAcceptFromResponse(response *string) (string, error) {
 
 	}
 	if !strings.HasPrefix(*response, lineSep) {
-		return "", dummyErr
+		return "", ErrClientHandshakeBadResponse
 	}
 	*response = (*response)[len(lineSep):]
 	if !foundSecWebSocketAccept {
-		return "", dummyErr
+		return "", ErrClientHandshakeNoAccept
 	}
 	return secWebSocketAccept, nil
 }
 
 type WSMessageKind byte
 
-const messageTEXT WSMessageKind = WSMessageKind(opCodeTEXT)
-const messageBIN WSMessageKind = WSMessageKind(opCodeBIN)
+const MessageTEXT WSMessageKind = WSMessageKind(OpCodeTEXT)
+const MessageBIN WSMessageKind = WSMessageKind(OpCodeBIN)
 
 type WSMessage struct {
 	Kind    WSMessageKind
@@ -644,27 +674,27 @@ type WSMessage struct {
 type WSOpcode byte
 
 const (
-	opCodeCONT  WSOpcode = 0x0
-	opCodeTEXT  WSOpcode = 0x1
-	opCodeBIN   WSOpcode = 0x2
-	opCodeCLOSE WSOpcode = 0x8
-	opCodePING  WSOpcode = 0x9
-	opCodePONG  WSOpcode = 0xA
+	OpCodeCONT  WSOpcode = 0x0
+	OpCodeTEXT  WSOpcode = 0x1
+	OpCodeBIN   WSOpcode = 0x2
+	OpCodeCLOSE WSOpcode = 0x8
+	OpCodePING  WSOpcode = 0x9
+	OpCodePONG  WSOpcode = 0xA
 )
 
 func (opcode WSOpcode) name() string {
 	switch opcode {
-	case opCodeCONT:
+	case OpCodeCONT:
 		return "CONT"
-	case opCodeTEXT:
+	case OpCodeTEXT:
 		return "TEXT"
-	case opCodeBIN:
+	case OpCodeBIN:
 		return "BIN"
-	case opCodeCLOSE:
+	case OpCodeCLOSE:
 		return "CLOSE"
-	case opCodePING:
+	case OpCodePING:
 		return "PING"
-	case opCodePONG:
+	case OpCodePONG:
 		return "PONG"
 	default:
 		if 0x3 <= opcode && opcode <= 0x7 {
@@ -690,14 +720,14 @@ type WSFrameHeader struct {
 	mask                  [4]byte
 }
 
-func Btoi(b bool) int {
+func btoi(b bool) int {
 	if b {
 		return 1
 	}
 	return 0
 }
 
-func Itob(i uint8) bool {
+func itob(i uint8) bool {
 	return i != 0
 }
 
@@ -721,7 +751,7 @@ func extendUnfinishedUtf8(payload *[]byte, pos int) {
 func utf8ToChar32Fixed(ptr unsafe.Pointer, size *int) (rune, error) {
 	maxSize := *size
 	if maxSize < 1 {
-		return 0, extraDummy
+		return 0, ErrShortUtf8
 	}
 	var c byte
 	c = *(*byte)(ptr)
@@ -734,84 +764,84 @@ func utf8ToChar32Fixed(ptr unsafe.Pointer, size *int) (rune, error) {
 	}
 	if c&0xE0 == 0xC0 {
 		if maxSize < 2 {
-			return 0, extraDummy
+			return 0, ErrShortUtf8
 		}
 		*size = 2
 		uc := rune(c&0x1F) << 6
 		c = *(*byte)(ptr)
 		// Overlong sequence or invalid second.
 		if uc == 0 || c&0xC0 != 0x80 {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		uc += rune(c & 0x3F)
 		// NEW: maximum overlong sequence
 		if uc <= 0b111_1111 {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		// NEW: UTF-16 surrogate pairs
 		if 0xD800 <= uc && uc <= 0xDFFF {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		return uc, nil
 	}
 	if c&0xF0 == 0xE0 {
 		if maxSize < 3 {
-			return 0, extraDummy
+			return 0, ErrShortUtf8
 		}
 		*size = 3
 		uc := rune(c&0x0F) << 12
 		c = *(*byte)(ptr)
 		// Overlong sequence or invalid last.
 		if c&0xC0 != 0x80 {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		uc += rune(c&0x3F) << 6
 		c = *(*byte)(unsafe.Add(ptr, byteSize))
 		if uc == 0 || c&0xC0 != 0x80 {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		uc += rune(c & 0x3F)
 		// NEW: maximum overlong sequence
 		if uc <= 0b11111_111111 {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		// NEW: UTF-16 surrogate pairs
 		if 0xD800 <= uc && uc <= 0xDFFF {
-			return 0, dummyErr
+			return 0, ErrInvalidUtf8
 		}
 		return uc, nil
 	}
 	if maxSize < 4 {
-		return 0, extraDummy
+		return 0, ErrShortUtf8
 	}
 	*size = 4
 	uc := rune(c&0x07) << 18
 	c = *(*byte)(ptr)
 	ptr = unsafe.Add(ptr, byteSize)
 	if c&0xC0 != 0x80 {
-		return 0, dummyErr
+		return 0, ErrInvalidUtf8
 	}
 	uc += rune(c&0x3F) << 12
 	c = *(*byte)(ptr)
 	ptr = unsafe.Add(ptr, byteSize)
 	if c&0xC0 != 0x80 {
-		return 0, dummyErr
+		return 0, ErrInvalidUtf8
 	}
 	uc += rune(c&0x3F) << 6
 	c = *(*byte)(ptr)
 	if uc == 0 || c&0xC0 != 0x80 {
-		return 0, dummyErr
+		return 0, ErrInvalidUtf8
 	}
 	uc += rune(c & 0x3F)
 	// NEW: UTF-16 surrogate pairs
 	if 0xD800 <= uc && uc <= 0xDFFF {
-		return 0, dummyErr
+		return 0, ErrInvalidUtf8
 	}
 	if uc <= 0b1111_111111_111111 {
-		return 0, dummyErr
+		return 0, ErrInvalidUtf8
 	}
 	if uc > 0x10FFFF {
-		return 0, dummyErr
+		return 0, ErrInvalidUtf8
 	}
 	return uc, nil
 }

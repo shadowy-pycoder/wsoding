@@ -8,13 +8,9 @@ import (
 
 	"github.com/mdlayher/socket"
 	"github.com/shadowy-pycoder/wsoding"
-	"github.com/shadowy-pycoder/wsoding/cmd/echo"
+	"github.com/shadowy-pycoder/wsoding/examples/internal/config"
+	"github.com/shadowy-pycoder/wsoding/examples/internal/echo"
 	"golang.org/x/sys/unix"
-)
-
-var (
-	host = [4]byte{0x7f, 0x000, 0x00, 0x01}
-	port = 9001
 )
 
 func main() {
@@ -22,11 +18,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = client.Connect(context.TODO(), &unix.SockaddrInet4{Port: port, Addr: host})
+	_, err = client.Connect(context.TODO(), &unix.SockaddrInet4{Port: config.Port, Addr: config.Host})
 	if err != nil {
 		log.Fatal(err)
 	}
-	ws, err := wsoding.Connect(client, netip.AddrFrom4(host).String(), "/")
+	ws, err := wsoding.Connect(client, netip.AddrFrom4(config.Host).String(), "/")
 	if err != nil {
 		log.Fatal(err)
 	}

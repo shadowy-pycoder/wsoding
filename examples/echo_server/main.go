@@ -9,13 +9,9 @@ import (
 
 	"github.com/mdlayher/socket"
 	"github.com/shadowy-pycoder/wsoding"
-	"github.com/shadowy-pycoder/wsoding/cmd/echo"
+	"github.com/shadowy-pycoder/wsoding/examples/internal/config"
+	"github.com/shadowy-pycoder/wsoding/examples/internal/echo"
 	"golang.org/x/sys/unix"
-)
-
-var (
-	host = [4]byte{0x7f, 0x000, 0x00, 0x01}
-	port = 9001
 )
 
 func main() {
@@ -31,7 +27,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = server.Bind(&unix.SockaddrInet4{Port: port, Addr: host})
+	err = server.Bind(&unix.SockaddrInet4{Port: config.Port, Addr: config.Host})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,17 +35,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Listening to %s:%d\n", netip.AddrFrom4(host), port)
+	fmt.Printf("Listening to %s:%d\n", netip.AddrFrom4(config.Host), config.Port)
 	for {
 		client, addr, err := server.Accept(context.TODO(), 0)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			continue
 		}
 		address := (addr).(*unix.SockaddrInet4)
 		fmt.Printf("%s:%d Client connected\n", netip.AddrFrom4(address.Addr), address.Port)
 		ws, err := wsoding.Accept(client)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			if err = client.Close(); err != nil {
+				log.Println(err)
+			}
 		}
 		ws.Debug = true
 		go echo.Serve(ws)

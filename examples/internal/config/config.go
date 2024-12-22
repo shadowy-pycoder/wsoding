@@ -1,0 +1,6 @@
+package config
+
+var (
+	Host = [4]byte{0x7f, 0x000, 0x00, 0x01}
+	Port = 9001
+)
