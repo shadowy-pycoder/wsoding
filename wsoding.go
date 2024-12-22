@@ -219,8 +219,8 @@ func (ws *WS) SendFrame(fin bool, opcode WSOpcode, payload []byte) error {
 				return err
 			}
 			length := []byte{
-				byte((len(payload) >> (8 * 1)) & 0xFF),
-				byte((len(payload) >> (8 * 0)) & 0xFF)}
+				byte(len(payload)>>(8*1)) & 0xFF,
+				byte(len(payload)>>(8*0)) & 0xFF}
 			err = ws.writeEntireBufferRaw(length)
 			if err != nil {
 				return err
@@ -233,14 +233,14 @@ func (ws *WS) SendFrame(fin bool, opcode WSOpcode, payload []byte) error {
 			}
 			data |= 127
 			length := []byte{
-				byte((len(payload) >> (8 * 7)) & 0xFF),
-				byte((len(payload) >> (8 * 6)) & 0xFF),
-				byte((len(payload) >> (8 * 5)) & 0xFF),
-				byte((len(payload) >> (8 * 4)) & 0xFF),
-				byte((len(payload) >> (8 * 3)) & 0xFF),
-				byte((len(payload) >> (8 * 2)) & 0xFF),
-				byte((len(payload) >> (8 * 1)) & 0xFF),
-				byte((len(payload) >> (8 * 0)) & 0xFF)}
+				byte(len(payload)>>(8*7)) & 0xFF,
+				byte(len(payload)>>(8*6)) & 0xFF,
+				byte(len(payload)>>(8*5)) & 0xFF,
+				byte(len(payload)>>(8*4)) & 0xFF,
+				byte(len(payload)>>(8*3)) & 0xFF,
+				byte(len(payload)>>(8*2)) & 0xFF,
+				byte(len(payload)>>(8*1)) & 0xFF,
+				byte(len(payload)>>(8*0)) & 0xFF}
 			err := ws.writeEntireBufferRaw([]byte{data})
 			if err != nil {
 				return err
@@ -445,11 +445,14 @@ loop:
 			case OpCodeCLOSE:
 				return nil, ErrCloseFrameSent
 			case OpCodePING:
-				payload, err := ws.readFrameEntirePayload(frame)
+				b, err := ws.readFrameEntirePayload(frame)
 				if err != nil {
 					return nil, err
 				}
-				ws.SendFrame(true, OpCodePONG, payload)
+				err = ws.SendFrame(true, OpCodePONG, b)
+				if err != nil {
+					return nil, err
+				}
 			case OpCodePONG:
 				_, err := ws.readFrameEntirePayload(frame)
 				if err != nil {
@@ -483,10 +486,7 @@ loop:
 				if err != nil {
 					return nil, err
 				}
-				if framePayloadSize > n {
-					break
-				}
-				payload = append(payload, framePayload[framePayloadSize:n]...)
+				payload = append(payload, framePayload[framePayloadSize:framePayloadSize+n]...)
 				framePayloadSize += n
 				if message.Kind == MessageTEXT {
 					// Verifying UTF-8
