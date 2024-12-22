@@ -85,5 +85,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Message from server: %s\n", messageFromServer.Payload)
+	fmt.Printf("Message from server: %s len: %d\n", messageFromServer.Payload, len(messageFromServer.Payload))
 }

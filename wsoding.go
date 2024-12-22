@@ -176,7 +176,11 @@ func (ws *WS) ClientHandshake(host, endpoint string) error {
 
 func (ws *WS) SendFrame(fin bool, opcode WSOpcode, payload []byte) error {
 	if ws.Debug {
-		fmt.Printf("WSODING DEBUG: TX FRAME: FIN(%v), OPCODE(%s), RSV(000), PAYLOAD_LEN: %d\n", fin, opcode.name(), len(payload))
+		var peerWho string = "Server"
+		if ws.Client {
+			peerWho = "Client"
+		}
+		fmt.Printf("WSODING DEBUG: %s TX FRAME: FIN(%v), OPCODE(%s), RSV(000), PAYLOAD_LEN: %d\n", peerWho, fin, opcode.name(), len(payload))
 	}
 	// Send FIN and OPCODE
 	{
@@ -356,7 +360,11 @@ func (ws *WS) readFrameHeader() (WSFrameHeader, error) {
 		}
 	}
 	if ws.Debug {
-		fmt.Printf("WSODING DEBUG: RX FRAME: FIN(%v), OPCODE(%s), RSV(%d%d%d), PAYLOAD_LEN: %d\n", frameHeader.fin, frameHeader.opcode.name(), btoi(frameHeader.rsv1), btoi(frameHeader.rsv2), btoi(frameHeader.rsv3),
+		var peerWho string = "Server"
+		if ws.Client {
+			peerWho = "Client"
+		}
+		fmt.Printf("WSODING DEBUG: %s RX FRAME: FIN(%v), OPCODE(%s), RSV(%d%d%d), PAYLOAD_LEN: %d\n", peerWho, frameHeader.fin, frameHeader.opcode.name(), btoi(frameHeader.rsv1), btoi(frameHeader.rsv2), btoi(frameHeader.rsv3),
 			frameHeader.payloadLen)
 	}
 	// RFC 6455 - Section 5.5:
@@ -422,7 +430,7 @@ func (ws *WS) readFrameEntirePayload(frameHeader WSFrameHeader) ([]byte, error) 
 
 func (ws *WS) ReadMessage() (*WSMessage, error) {
 	var message WSMessage
-	payload := make([]byte, 1024)
+	payload := make([]byte, 0, 1024)
 	var cont bool
 	var verifyPos int
 loop:
