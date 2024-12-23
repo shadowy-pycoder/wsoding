@@ -1,5 +1,5 @@
 
-# wsoding - [Tsoding's](https://github.com/tsoding) [c3ws](https://github.com/tsoding/c3ws) library ported to Go
+# wsoding - [Tsoding's](https://github.com/tsoding) [c3ws](https://github.com/tsoding/c3ws) library translated to Go
 
 
 > *Work in progress*
