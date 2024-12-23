@@ -11,7 +11,6 @@ import (
 	"math"
 	"strings"
 	"syscall"
-	"unsafe"
 
 	"github.com/mdlayher/socket"
 )
@@ -492,13 +491,13 @@ loop:
 					// Verifying UTF-8
 					for verifyPos < len(payload) {
 						size := len(payload) - verifyPos
-						if _, err := utf8ToChar32Fixed(unsafe.Pointer(unsafe.SliceData(payload[verifyPos:])), &size); err != nil {
+						if _, err := utf8ToChar32Fixed(payload[verifyPos:], &size); err != nil {
 							if errors.Is(err, ErrShortUtf8) {
 								if !frame.fin {
 									savedLen := len(payload)
 									extendUnfinishedUtf8(&payload, verifyPos)
 									size = len(payload) - verifyPos
-									_, err := utf8ToChar32Fixed(unsafe.Pointer(unsafe.SliceData(payload[verifyPos:])), &size)
+									_, err := utf8ToChar32Fixed(payload[verifyPos:], &size)
 									if err != nil {
 										return nil, err
 									}
@@ -759,16 +758,12 @@ func extendUnfinishedUtf8(payload *[]byte, pos int) {
 	}
 }
 
-func utf8ToChar32Fixed(ptr unsafe.Pointer, size *int) (rune, error) {
+func utf8ToChar32Fixed(payload []byte, size *int) (rune, error) {
 	maxSize := *size
 	if maxSize < 1 {
 		return 0, ErrShortUtf8
 	}
-	var c byte
-	c = *(*byte)(ptr)
-	byteSize := unsafe.Sizeof(new(byte))
-	ptr = unsafe.Add(ptr, byteSize)
-
+	c := payload[0]
 	if c&0x80 == 0 {
 		*size = 1
 		return rune(c), nil
@@ -779,7 +774,7 @@ func utf8ToChar32Fixed(ptr unsafe.Pointer, size *int) (rune, error) {
 		}
 		*size = 2
 		uc := rune(c&0x1F) << 6
-		c = *(*byte)(ptr)
+		c = payload[1]
 		// Overlong sequence or invalid second.
 		if uc == 0 || c&0xC0 != 0x80 {
 			return 0, ErrInvalidUtf8
@@ -801,13 +796,13 @@ func utf8ToChar32Fixed(ptr unsafe.Pointer, size *int) (rune, error) {
 		}
 		*size = 3
 		uc := rune(c&0x0F) << 12
-		c = *(*byte)(ptr)
+		c = payload[1]
 		// Overlong sequence or invalid last.
 		if c&0xC0 != 0x80 {
 			return 0, ErrInvalidUtf8
 		}
 		uc += rune(c&0x3F) << 6
-		c = *(*byte)(unsafe.Add(ptr, byteSize))
+		c = payload[2]
 		if uc == 0 || c&0xC0 != 0x80 {
 			return 0, ErrInvalidUtf8
 		}
@@ -827,19 +822,17 @@ func utf8ToChar32Fixed(ptr unsafe.Pointer, size *int) (rune, error) {
 	}
 	*size = 4
 	uc := rune(c&0x07) << 18
-	c = *(*byte)(ptr)
-	ptr = unsafe.Add(ptr, byteSize)
+	c = payload[1]
 	if c&0xC0 != 0x80 {
 		return 0, ErrInvalidUtf8
 	}
 	uc += rune(c&0x3F) << 12
-	c = *(*byte)(ptr)
-	ptr = unsafe.Add(ptr, byteSize)
+	c = payload[2]
 	if c&0xC0 != 0x80 {
 		return 0, ErrInvalidUtf8
 	}
 	uc += rune(c&0x3F) << 6
-	c = *(*byte)(ptr)
+	c = payload[3]
 	if uc == 0 || c&0xC0 != 0x80 {
 		return 0, ErrInvalidUtf8
 	}
