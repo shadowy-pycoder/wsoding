@@ -9,7 +9,18 @@ import (
 )
 
 func Serve(ws wsoding.WS) {
-	defer ws.Close()
+	defer (func() {
+		// TODO: Tuck sending the CLOSE frame under some abstraction of "Closing the WebSocket".
+		// Maybe some sort of ws.close() method.
+		// TODO: The sender may give a reason of the close via the status code
+		// See RFC6466, Section 7.4
+		if err := ws.SendFrame(true, wsoding.OpCodeCLOSE, []byte{}); err != nil {
+			log.Println(err)
+		}
+		if err := ws.Close(); err != nil {
+			log.Println(err)
+		}
+	})()
 	peerWho := "Client"
 	if ws.Client {
 		peerWho = "Server"
@@ -21,14 +32,6 @@ func Serve(ws wsoding.WS) {
 				log.Printf("INFO: %s closed connection\n", peerWho)
 			} else {
 				log.Printf("ERROR: %s connection failed: %s\n", peerWho, err)
-			}
-			// TODO: Tuck sending the CLOSE frame under some abstraction of "Closing the WebSocket".
-			// Maybe some sort of ws.close() method.
-			// TODO: The sender may give a reason of the close via the status code
-			// See RFC6466, Section 7.4
-			err = ws.SendFrame(true, wsoding.OpCodeCLOSE, []byte{})
-			if err != nil {
-				log.Println(err)
 			}
 			break
 		}

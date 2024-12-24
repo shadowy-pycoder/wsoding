@@ -289,13 +289,15 @@ func (ws *WS) SendMessage(kind WSMessageKind, payload []byte) error {
 		if first {
 			opcode = WSOpcode(kind)
 		}
+		if opcode == OpCodeCONT && len(payload) == 0 {
+			break
+		}
 		err := ws.SendFrame(fin, opcode, payload[0:length])
 		if err != nil {
 			return err
 		}
 		payload = payload[length:]
 		first = false
-
 		if len(payload) == 0 {
 			break
 		}
