@@ -428,7 +428,6 @@ func (ws *WS) ReadMessage() (*WSMessage, error) {
 	var verifyPos int
 loop:
 	for {
-
 		frame, err := ws.readFrameHeader()
 		if err != nil {
 			return nil, err
@@ -459,9 +458,7 @@ loop:
 		} else {
 			if !cont {
 				switch frame.opcode {
-				case OpCodeTEXT:
-					fallthrough
-				case OpCodeBIN:
+				case OpCodeTEXT, OpCodeBIN:
 					message.Kind = WSMessageKind(frame.opcode)
 				default:
 					return nil, ErrUnexpectedOpCode
@@ -508,10 +505,11 @@ loop:
 
 				}
 			}
+			if frame.fin {
+				break
+			}
 		}
-		if frame.fin {
-			break
-		}
+
 	}
 	message.Payload = payload
 	return &message, nil
