@@ -10,9 +10,9 @@ import (
 
 func Serve(ws wsoding.WS) {
 	defer ws.Close()
-	peerWho := "Server"
+	peerWho := "Client"
 	if ws.Client {
-		peerWho = "Client"
+		peerWho = "Server"
 	}
 	for i := 0; ; i++ {
 		message, err := ws.ReadMessage()
