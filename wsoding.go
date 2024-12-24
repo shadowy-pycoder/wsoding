@@ -817,35 +817,41 @@ func utf8ToChar32Fixed(payload []byte, size *int) (rune, error) {
 		}
 		return uc, nil
 	}
-	if maxSize < 4 {
-		return 0, ErrShortUtf8
+	if c&0xF0 == 0xF0 {
+		if maxSize < 4 {
+			return 0, ErrShortUtf8
+		}
+		if c&0xF8 != 0xF0 {
+			return 0, ErrInvalidUtf8
+		}
+		*size = 4
+		uc := rune(c&0x07) << 18
+		c = payload[1]
+		if c&0xC0 != 0x80 {
+			return 0, ErrInvalidUtf8
+		}
+		uc += rune(c&0x3F) << 12
+		c = payload[2]
+		if c&0xC0 != 0x80 {
+			return 0, ErrInvalidUtf8
+		}
+		uc += rune(c&0x3F) << 6
+		c = payload[3]
+		if uc == 0 || c&0xC0 != 0x80 {
+			return 0, ErrInvalidUtf8
+		}
+		uc += rune(c & 0x3F)
+		// NEW: UTF-16 surrogate pairs
+		if 0xD800 <= uc && uc <= 0xDFFF {
+			return 0, ErrInvalidUtf8
+		}
+		if uc <= 0b1111_111111_111111 {
+			return 0, ErrInvalidUtf8
+		}
+		if uc > 0x10FFFF {
+			return 0, ErrInvalidUtf8
+		}
+		return uc, nil
 	}
-	*size = 4
-	uc := rune(c&0x07) << 18
-	c = payload[1]
-	if c&0xC0 != 0x80 {
-		return 0, ErrInvalidUtf8
-	}
-	uc += rune(c&0x3F) << 12
-	c = payload[2]
-	if c&0xC0 != 0x80 {
-		return 0, ErrInvalidUtf8
-	}
-	uc += rune(c&0x3F) << 6
-	c = payload[3]
-	if uc == 0 || c&0xC0 != 0x80 {
-		return 0, ErrInvalidUtf8
-	}
-	uc += rune(c & 0x3F)
-	// NEW: UTF-16 surrogate pairs
-	if 0xD800 <= uc && uc <= 0xDFFF {
-		return 0, ErrInvalidUtf8
-	}
-	if uc <= 0b1111_111111_111111 {
-		return 0, ErrInvalidUtf8
-	}
-	if uc > 0x10FFFF {
-		return 0, ErrInvalidUtf8
-	}
-	return uc, nil
+	return 0, ErrInvalidUtf8
 }
