@@ -3,7 +3,7 @@
     "servers": [
         {
             "agent": "ReadAllWriteMessage",
-            "url": "ws://172.17.0.1:9001"
+            "url": "ws://localhost:9001"
         }
     ],
     "cases": ["*"],

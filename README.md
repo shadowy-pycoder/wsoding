@@ -2,7 +2,7 @@
 # wsoding - [Tsoding's](https://github.com/tsoding) [c3ws](https://github.com/tsoding/c3ws) library translated to Go
 
 
-> *Work in progress*
+> *Made it work for majority of the Autobahn Test Cases, so this project can be considered done (with extremely unfriendly API)*
 
 ## Echo Server
 
@@ -17,7 +17,7 @@ In one terminal:
 
 In another terminal
 ```shell
-./build/send_client 172.17.0.1 9001 "Hello, World" 
+./build/send_client 127.0.0.1 9001 "Hello, World" 
 ```
 
 You can also connect to the server from a browser:
@@ -28,8 +28,8 @@ firefox ./tools/example_send_client.html
 ## Autobahn Test Suite
 
 ```shell
-docker run -it --rm \               
-    -v ${PWD}/config:/config \
+docker run -it --rm --net=host\               
+    -v ${PWD}/autobahn:/config \
     -v ${PWD}/reports:/reports \
     crossbario/autobahn-testsuite \
     wstest -m fuzzingclient -s /config/fuzzingclient.json
