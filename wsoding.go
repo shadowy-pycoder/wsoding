@@ -34,7 +34,9 @@ func (ws *WS) Close() error {
 	for {
 		n, err := ws.Sock.Read(buffer)
 		if err != nil {
-			return err
+			if !errors.Is(err, io.EOF) {
+				return err
+			}
 		}
 		if n == 0 {
 			break

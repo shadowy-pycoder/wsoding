@@ -3,7 +3,6 @@ package echo
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 
 	"github.com/shadowy-pycoder/wsoding"
@@ -19,9 +18,7 @@ func Serve(ws wsoding.WS) {
 			log.Println(err)
 		}
 		if err := ws.Close(); err != nil {
-			if !errors.Is(err, io.EOF) {
-				log.Println(err)
-			}
+			log.Println(err)
 		}
 	})()
 	peerWho := "Client"
