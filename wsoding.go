@@ -68,8 +68,8 @@ func (ws *WS) writeEntireBufferRaw(buffer []byte) error {
 	return nil
 }
 
-func (ws *WS) peekRaw(buffer []byte) (int, error) {
-	n, _, err := ws.Sock.Recvfrom(context.TODO(), buffer, syscall.MSG_PEEK)
+func (ws *WS) peekRaw(ctx context.Context, buffer []byte) (int, error) {
+	n, _, err := ws.Sock.Recvfrom(ctx, buffer, syscall.MSG_PEEK)
 	if err != nil {
 		return 0, err
 	}
@@ -78,12 +78,12 @@ func (ws *WS) peekRaw(buffer []byte) (int, error) {
 
 // TODO: make nonblocking version of c3ws::accept
 
-func Accept(sock *socket.Conn) (WS, error) {
+func Accept(ctx context.Context, sock *socket.Conn) (WS, error) {
 	ws := WS{
 		Sock:   sock,
 		Client: false,
 	}
-	err := ws.ServerHandshake()
+	err := ws.ServerHandshake(ctx)
 	if err != nil {
 		return WS{}, err
 	}
@@ -92,22 +92,22 @@ func Accept(sock *socket.Conn) (WS, error) {
 
 // TODO: connect should just accept a ws/wss URL
 
-func Connect(sock *socket.Conn, host string, endpoint string) (WS, error) {
+func Connect(ctx context.Context, sock *socket.Conn, host string, endpoint string) (WS, error) {
 	ws := WS{
 		Sock:   sock,
 		Client: true,
 	}
-	err := ws.ClientHandshake(host, endpoint)
+	err := ws.ClientHandshake(ctx, host, endpoint)
 	if err != nil {
 		return WS{}, err
 	}
 	return ws, nil
 }
 
-func (ws *WS) ServerHandshake() error {
+func (ws *WS) ServerHandshake(ctx context.Context) error {
 	// TODO: Ws.server_handshake assumes that request fits into 1024 bytes
 	buffer := make([]byte, 1024)
-	bufferSize, err := ws.peekRaw(buffer)
+	bufferSize, err := ws.peekRaw(ctx, buffer)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (ws *WS) ServerHandshake() error {
 // https://datatracker.ietf.org/doc/html/rfc6455#section-1.3
 // TODO: Ws.client_handshake should just accept a ws/wss URL
 
-func (ws *WS) ClientHandshake(host, endpoint string) error {
+func (ws *WS) ClientHandshake(ctx context.Context, host, endpoint string) error {
 	var handshake strings.Builder
 	handshake.Grow(1024)
 	// TODO: customizable resource path
@@ -156,7 +156,7 @@ func (ws *WS) ClientHandshake(host, endpoint string) error {
 	}
 	// TODO: Ws.client_handshake assumes that response fits into 1024 bytes
 	buffer := make([]byte, 1024)
-	bufferSize, err := ws.peekRaw(buffer)
+	bufferSize, err := ws.peekRaw(ctx, buffer)
 	if err != nil {
 		return err
 	}

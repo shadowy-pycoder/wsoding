@@ -55,7 +55,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = client.Connect(context.TODO(), &unix.SockaddrInet4{Port: port, Addr: host.As4()})
+	ctx := context.Background()
+	_, err = client.Connect(ctx, &unix.SockaddrInet4{Port: port, Addr: host.As4()})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func main() {
 		}
 	})()
 	hostPort := fmt.Sprintf("%s:%d", host, config.Port)
-	if err := ws.ClientHandshake(hostPort, "/"); err != nil {
+	if err := ws.ClientHandshake(ctx, hostPort, "/"); err != nil {
 		log.Fatal(err)
 	}
 	if err := ws.SendText(message); err != nil {

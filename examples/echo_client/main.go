@@ -19,12 +19,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = client.Connect(context.TODO(), &unix.SockaddrInet4{Port: config.Port, Addr: config.Host})
+	ctx := context.Background()
+	_, err = client.Connect(ctx, &unix.SockaddrInet4{Port: config.Port, Addr: config.Host})
 	if err != nil {
 		log.Fatal(err)
 	}
 	hostPort := fmt.Sprintf("%s:%d", netip.AddrFrom4(config.Host), config.Port)
-	ws, err := wsoding.Connect(client, hostPort, "/")
+	ws, err := wsoding.Connect(ctx, client, hostPort, "/")
 	if err != nil {
 		log.Fatal(err)
 	}

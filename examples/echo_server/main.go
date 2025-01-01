@@ -35,16 +35,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	ctx := context.Background()
 	fmt.Printf("Listening to %s:%d\n", netip.AddrFrom4(config.Host), config.Port)
 	for {
-		client, addr, err := server.Accept(context.TODO(), 0)
+		client, addr, err := server.Accept(ctx, 0)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 		address := (addr).(*unix.SockaddrInet4)
 		fmt.Printf("%s:%d Client connected\n", netip.AddrFrom4(address.Addr), address.Port)
-		ws, err := wsoding.Accept(client)
+		ws, err := wsoding.Accept(ctx, client)
 		if err != nil {
 			log.Println(err)
 			if err = client.Close(); err != nil {

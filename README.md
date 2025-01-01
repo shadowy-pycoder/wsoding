@@ -28,7 +28,7 @@ firefox ./tools/example_send_client.html
 ## Autobahn Test Suite
 
 ```shell
-docker run -it --rm --net=host\               
+docker run -it --rm --net=host \
     -v ${PWD}/autobahn:/config \
     -v ${PWD}/reports:/reports \
     crossbario/autobahn-testsuite \

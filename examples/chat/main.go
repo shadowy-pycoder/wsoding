@@ -18,11 +18,11 @@ import (
 
 type Clients struct {
 	sync.Mutex
-	data map[string]wsoding.WS
+	conn map[string]wsoding.WS
 }
 
 func main() {
-	clients := Clients{data: make(map[string]wsoding.WS)}
+	clients := Clients{conn: make(map[string]wsoding.WS)}
 	server, err := socket.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0, "wsoding-chat", nil)
 	if err != nil {
 		log.Fatal(err)
@@ -40,8 +40,9 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("Listening to %s:%d\n", netip.AddrFrom4(config.Host), config.Port)
+	ctx := context.Background()
 	for {
-		client, addr, err := server.Accept(context.TODO(), 0)
+		client, addr, err := server.Accept(ctx, 0)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -49,7 +50,7 @@ func main() {
 		address := (addr).(*unix.SockaddrInet4)
 		addrStr := fmt.Sprintf("%s:%d", netip.AddrFrom4(address.Addr), address.Port)
 		fmt.Printf("%s Client connected\n", addrStr)
-		ws, err := wsoding.Accept(client)
+		ws, err := wsoding.Accept(ctx, client)
 		if err != nil {
 			log.Println(err)
 			if err = client.Close(); err != nil {
@@ -59,9 +60,9 @@ func main() {
 		}
 		ws.Debug = true
 		clients.Lock()
-		clients.data[addrStr] = ws
+		clients.conn[addrStr] = ws
 		clients.Unlock()
-		for c := range maps.Values(clients.data) {
+		for c := range maps.Values(clients.conn) {
 			err = c.SendMessage(wsoding.MessageTEXT, []byte(fmt.Sprintf("%s Joined the chat", addrStr)))
 			if err != nil {
 				log.Println(err)
@@ -76,9 +77,8 @@ func main() {
 					log.Println(err)
 				}
 				clients.Lock()
-				delete(clients.data, addrStr)
+				delete(clients.conn, addrStr)
 				clients.Unlock()
-				fmt.Println(len(clients.data))
 			})()
 			for {
 				message, err := ws.ReadMessage()
@@ -86,7 +86,7 @@ func main() {
 					log.Println(err)
 					break
 				}
-				for c := range maps.Values(clients.data) {
+				for c := range maps.Values(clients.conn) {
 					err = c.SendMessage(message.Kind, bytes.Join([][]byte{[]byte(addrStr), message.Payload}, []byte(" ")))
 					if err != nil {
 						log.Println(err)
